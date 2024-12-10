@@ -255,6 +255,20 @@ def run_dl_experiment(data, model_type='lstm', merge_codes=None, use_weights=Tru
     embedding_dim = 100
     num_classes = y_cat.shape[1]
     
+    # Create initial config dictionary
+    config = {
+        'timestamp': run_timestamp,
+        'model_type': model_type,
+        'merged_codes': merge_codes if merge_codes else 'None',
+        'use_weights': use_weights,
+        'vocab_size': vocab_size,
+        'embedding_dim': embedding_dim,
+        'max_length': max_length,
+        'num_classes': num_classes,
+        'class_weights': convert_to_serializable(class_weight_dict) if use_weights else 'None',
+        'unique_classes': convert_to_serializable(label_encoder.classes_.tolist())
+    }
+    
     # Load embeddings if specified
     embedding_matrix = None
     if embedding_path:
@@ -266,12 +280,16 @@ def run_dl_experiment(data, model_type='lstm', merge_codes=None, use_weights=Tru
             embedding_dim
         )
         
-        # Update config to include embedding info
+        # Update config with embedding info
         config['embedding_model'] = {
             'path': embedding_path,
             'type': embedding_type,
             'trainable': False
         }
+    
+    # Save model configuration
+    with open(os.path.join(run_dir, 'models/configs', 'model_config.json'), 'w') as f:
+        json.dump(config, f, indent=4)
     
     # Build model with embeddings
     if model_type.lower() == 'lstm':
@@ -291,23 +309,6 @@ def run_dl_experiment(data, model_type='lstm', merge_codes=None, use_weights=Tru
         loss='categorical_crossentropy',
         metrics=['accuracy']
     )
-    
-    # Save model configuration
-    config = {
-        'timestamp': run_timestamp,
-        'model_type': model_type,
-        'merged_codes': merge_codes if merge_codes else 'None',
-        'use_weights': use_weights,
-        'vocab_size': vocab_size,
-        'embedding_dim': embedding_dim,
-        'max_length': max_length,
-        'num_classes': num_classes,
-        'class_weights': convert_to_serializable(class_weight_dict) if use_weights else 'None',
-        'unique_classes': convert_to_serializable(label_encoder.classes_.tolist())
-    }
-    
-    with open(os.path.join(run_dir, 'models/configs', 'model_config.json'), 'w') as f:
-        json.dump(config, f, indent=4)
     
     # Train model
     history = model.fit(
