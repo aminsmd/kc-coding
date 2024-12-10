@@ -1,86 +1,132 @@
 # kc-coding
 
-## Project Structure
+## Machine Learning Experiments
 
-### Results Directory
+### Traditional ML Implementation
+
+The project includes a comprehensive machine learning pipeline implemented in `ml_experiments.py` that supports:
+
+- Multiple classifier types (Logistic Regression, Random Forest, Naive Bayes, SVM)
+- Class weighting for imbalanced datasets
+- KC (Knowledge Component) code merging
+- Cross-validation
+- Extensive metrics and visualizations
+
+### Running Experiments
+
+```python
+from ml_experiments import run_ml_experiment
+import pandas as pd
+
+# Load data
+data = pd.read_csv('path/to/data.csv')
+
+# Run with class weights
+run_dir_1 = run_ml_experiment(data, use_weights=True)
+
+# Run without class weights
+run_dir_2 = run_ml_experiment(data, use_weights=False)
+
+# Run with merged KC codes
+run_dir_3 = run_ml_experiment(data, merge_codes=[[4,5]], use_weights=True)
+```
+
+### Project Structure
 
 The project maintains an organized structure for experimental results:
 
 ```
 Results/
-├── traditional_ml/
+├── traditional_ml/                         # Currently Implemented
 │   ├── weighted/
 │   │   └── run_YYYYMMDD_HHMMSS/
 │   │       ├── metrics/
-│   │       │   ├── confusion_matrices/
-│   │       │   ├── classification_reports/
+│   │       │   ├── confusion_matrices/      # Confusion matrix plots for each model
+│   │       │   ├── classification_reports/  # Detailed metrics in JSON format
 │   │       │   └── summary/
+│   │       │       ├── model_performance.csv    # Summary of all models
+│   │       │       └── class_distribution.json  # Class distribution analysis
 │   │       ├── models/
-│   │       │   ├── weights/
-│   │       │   ├── checkpoints/
 │   │       │   └── configs/
+│   │       │       ├── experiment_config.json   # Experiment parameters
+│   │       │       ├── class_weights.json       # Class weighting details
+│   │       │       └── full_results.json        # Complete results
 │   │       ├── visualizations/
-│   │       │   ├── feature_importance/
-│   │       │   └── training_curves/
+│   │       │   └── feature_importance/          # Feature importance plots
 │   │       └── logs/
-│   │           ├── training_logs/
-│   │           └── error_logs/
-│   └── unweighted/
-├── neural_networks/
+│   │           └── training_logs/               # Training progress logs
+│   ├── weighted_merged/                         # Experiments with merged KCs
+│   └── unweighted/                             # Experiments without class weights
+├── neural_networks/                        # Planned Implementation
 │   ├── feedforward/
 │   ├── cnn/
 │   └── rnn/
-└── transformers/
+└── transformers/                          # Planned Implementation
     ├── bert/
     ├── roberta/
     └── distilbert/
 ```
 
-### Directory Structure Explanation
+### Current Implementation
 
-- **traditional_ml/**: Classical machine learning models
-  - `weighted/`: Models trained with class weights
-  - `unweighted/`: Models trained without class weights
-  
-- **neural_networks/**: Deep learning models
-  - `feedforward/`: Simple neural networks
-  - `cnn/`: Convolutional neural networks
-  - `rnn/`: Recurrent neural networks
+#### Metrics
+- **Confusion Matrices**: Visual representation of model predictions
+- **Classification Reports**: Precision, recall, F1-score for each class
+- **Summary Statistics**: Cross-validated performance metrics
 
-- **transformers/**: Transformer-based models
-  - `bert/`: BERT models
-  - `roberta/`: RoBERTa models
-  - `distilbert/`: DistilBERT models
+#### Visualizations
+- **Feature Importance Plots**: For supported models (Logistic Regression, SVM)
+- Top features contributing to each KC classification
 
-### Run Directory Contents
+#### Configurations
+- **Experiment Parameters**: Timestamp, KC merging details, weighting configuration
+- **Class Weights**: Computed weights for handling class imbalance
+- **Full Results**: Comprehensive results including all metrics and analyses
 
-Each experimental run creates a timestamped directory containing:
+### Currently Implemented Models
 
-- **metrics/**: Performance measurements
-  - `confusion_matrices/`: Confusion matrix plots
-  - `classification_reports/`: Detailed classification metrics
-  - `summary/`: Overall performance metrics
+1. **Logistic Regression**
+   - Supports class weights
+   - Includes feature importance analysis
 
-- **models/**: Model artifacts
-  - `weights/`: Saved model weights
-  - `checkpoints/`: Training checkpoints
-  - `configs/`: Model configurations
+2. **Random Forest**
+   - Supports class weights
+   - Handles non-linear relationships
 
-- **visualizations/**: Visual analysis
-  - `feature_importance/`: Feature importance plots
-  - `training_curves/`: Learning curves and training metrics
+3. **Naive Bayes**
+   - Multinomial implementation
+   - No class weight support
 
-- **logs/**: Runtime information
-  - `training_logs/`: Training progress logs
-  - `error_logs/`: Error and warning messages
+4. **Support Vector Machine (SVM)**
+   - Linear implementation
+   - Supports class weights
+   - Includes feature importance analysis
 
-### Usage
+### Planned Implementations
 
-When implementing new models, maintain this directory structure by:
+#### Neural Networks
+- Feedforward networks for basic sequence classification
+- CNNs for pattern recognition in text
+- RNNs for sequential data processing
 
-1. Creating appropriate subdirectories for your model type
-2. Using timestamped run directories
-3. Organizing outputs into the standard categories
-4. Maintaining consistent naming conventions
+#### Transformers
+- BERT-based models for contextual understanding
+- RoBERTa for robust performance
+- DistilBERT for efficient inference
 
-This structure ensures reproducibility and easy comparison across different models and experiments.
+### Current Features
+
+- **KC Merging**: Ability to combine multiple KC codes
+- **Class Weighting**: Balanced class weight computation
+- **Cross-validation**: 5-fold validation with multiple metrics
+- **TF-IDF Vectorization**: Text feature extraction
+- **Comprehensive Logging**: Detailed training and evaluation logs
+
+### Usage Notes
+
+1. **Data Format**: Input data should contain 'event_result' and 'KC' columns
+2. **KC Merging**: Specify KC codes to merge as nested lists (e.g., `[[4,5], [1,2]]`)
+3. **Class Weights**: Toggle with `use_weights` parameter
+4. **Results**: Each run creates a timestamped directory with full results
+
+This structure ensures reproducibility and easy comparison across different models and experiments, while providing a framework for future implementations.

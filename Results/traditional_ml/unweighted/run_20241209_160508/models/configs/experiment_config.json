@@ -1,0 +1,14 @@
+{
+    "timestamp": "20241209_160508",
+    "merged_codes": "None",
+    "use_weights": false,
+    "class_weights": "None",
+    "unique_classes": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6"
+    ]
+}
