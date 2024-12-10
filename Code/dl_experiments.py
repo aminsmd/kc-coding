@@ -10,7 +10,7 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import (
     Dense, LSTM, Embedding, Input, Dropout, 
-    Conv1D, MaxPooling1D, GlobalMaxPooling1D
+    Conv1D, MaxPooling1D, GlobalMaxPooling1D, BatchNormalization
 )
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
@@ -148,10 +148,18 @@ def build_lstm_model_with_embeddings(vocab_size, embedding_dim, max_length, num_
     else:
         x = Embedding(vocab_size, embedding_dim)(inputs)
     
-    x = LSTM(100, return_sequences=True)(x)
-    x = LSTM(50)(x)
-    x = Dense(50, activation='relu')(x)
-    x = Dropout(0.2)(x)
+    x = LSTM(200, return_sequences=True)(x)
+    x = BatchNormalization()(x)
+    x = Dropout(0.3)(x)
+    
+    x = LSTM(100)(x)
+    x = BatchNormalization()(x)
+    x = Dropout(0.3)(x)
+    
+    x = Dense(100, activation='relu')(x)
+    x = BatchNormalization()(x)
+    x = Dropout(0.3)(x)
+    
     outputs = Dense(num_classes, activation='softmax')(x)
     model = Model(inputs=inputs, outputs=outputs)
     return model
@@ -252,7 +260,8 @@ def run_dl_experiment(data, model_type='lstm', merge_codes=None, use_weights=Tru
     
     # Model parameters
     vocab_size = len(tokenizer.word_index) + 1
-    embedding_dim = 100
+    embedding_dim = 300  # Increased from 100
+    max_length = 100    # Increased from 50
     num_classes = y_cat.shape[1]
     
     # Create initial config dictionary
@@ -310,15 +319,38 @@ def run_dl_experiment(data, model_type='lstm', merge_codes=None, use_weights=Tru
         metrics=['accuracy']
     )
     
+    # Add early stopping with restore_best_weights=True
+    early_stopping = tf.keras.callbacks.EarlyStopping(
+        monitor='val_loss',
+        patience=5,
+        restore_best_weights=True  # This ensures we keep the best weights
+    )
+    
+    # Add model checkpoint to save best weights
+    best_weights_path = os.path.join(run_dir, 'models/weights', 'best.weights.h5')
+    checkpoint = tf.keras.callbacks.ModelCheckpoint(
+        best_weights_path,
+        monitor='val_loss',
+        save_best_only=True,
+        save_weights_only=True,
+        mode='min',
+        verbose=1  # Add verbosity to see when weights are saved
+    )
+    
     # Train model
     history = model.fit(
         X_train, y_train,
         validation_data=(X_val, y_val),
-        epochs=10,
+        epochs=50,
         batch_size=32,
         class_weight=class_weight_dict,
+        callbacks=[early_stopping, checkpoint],
         verbose=1
     )
+    
+    # Load the best weights before final evaluation
+    print("\nLoading best weights for final evaluation...")
+    model.load_weights(best_weights_path)
     
     # Save training history
     history_dict = convert_to_serializable(history.history)
@@ -328,17 +360,22 @@ def run_dl_experiment(data, model_type='lstm', merge_codes=None, use_weights=Tru
     # Plot training curves
     plot_training_history(history, run_dir, model_type.upper())
     
-    # Save model weights
-    model.save_weights(os.path.join(run_dir, 'models/weights', 'final_weights.h5'))
+    # Save final weights as well (though best weights are more important)
+    final_weights_path = os.path.join(run_dir, 'models/weights', 'final.weights.h5')
+    model.save_weights(final_weights_path)
     
-    # Evaluate model
-    val_loss, val_accuracy = model.evaluate(X_val, y_val, verbose=0)
+    # Evaluate model using best weights
+    print("\nEvaluating model with best weights...")
+    val_loss, val_accuracy = model.evaluate(X_val, y_val, verbose=1)
     
     # Save evaluation metrics
     metrics = {
         'validation_loss': float(val_loss),
         'validation_accuracy': float(val_accuracy),
-        'training_history': history_dict
+        'training_history': history_dict,
+        'best_weights_path': best_weights_path,
+        'final_weights_path': final_weights_path,
+        'early_stopping_epoch': early_stopping.stopped_epoch if early_stopping.stopped_epoch > 0 else len(history.history['loss'])
     }
     
     with open(os.path.join(run_dir, 'metrics/summary', 'evaluation_metrics.json'), 'w') as f:
