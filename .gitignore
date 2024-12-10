@@ -163,3 +163,5 @@ cython_debug/
 .venv/
 .env/
 Cleaned_Mel_CPS_19_Dataset.csv
+crawl-300d-2M-subword.zip
+Data/
