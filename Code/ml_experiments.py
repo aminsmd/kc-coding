@@ -173,12 +173,30 @@ def run_ml_experiment(data, merge_codes=None, use_weights=True):
         # Create confusion matrix
         cm = confusion_matrix(y, y_pred)
         plt.figure(figsize=(10, 8))
-        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+        
+        # Get unique labels for axis labels
+        unique_labels = sorted(np.unique(y))
+        
+        # Create heatmap with proper labels
+        sns.heatmap(
+            cm, 
+            annot=True, 
+            fmt='d', 
+            cmap='Blues',
+            xticklabels=unique_labels,
+            yticklabels=unique_labels
+        )
         plt.title(f'Confusion Matrix - {name}')
         plt.ylabel('True Label')
         plt.xlabel('Predicted Label')
-        plt.savefig(os.path.join(run_dir, 'metrics/confusion_matrices', 
-                                f'{name.lower()}_cm.png'))
+        
+        # Create directories if they don't exist
+        cm_dir = os.path.join(run_dir, 'metrics', 'confusion_matrices')
+        os.makedirs(cm_dir, exist_ok=True)
+        
+        # Save with tight layout to prevent label cutoff
+        plt.tight_layout()
+        plt.savefig(os.path.join(cm_dir, f'{name.lower()}_cm.png'))
         plt.close()
         
         # Store results

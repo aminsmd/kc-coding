@@ -1,0 +1,43 @@
+{
+  "os":  "Linux-6.1.85+-x86_64-with-glibc2.35",
+  "python":  "CPython 3.10.12",
+  "startedAt":  "2024-12-28T00:56:22.809284Z",
+  "program":  "Pipeline.ipynb",
+  "codePath":  "Code/Pipeline.ipynb",
+  "git":  {
+    "remote":  "https://github.com/aminsmd/kc-coding.git",
+    "commit":  "6aa6624367afe2a65e885e3d3ef2b0dae23f428b"
+  },
+  "email":  "aminsamadi21@gmail.com",
+  "root":  "/content/drive/Shareddrives/La(LA)LAB/Research Projects/kc-coding/Code",
+  "host":  "f5f398a0b54d",
+  "executable":  "/usr/bin/python3",
+  "codePathLocal":  "Pipeline.ipynb",
+  "colab":  "https://colab.research.google.com/notebook#fileId=1DbPY0MuWtaxoG7a5oSGMfMDU2k0ELH3O",
+  "cpu_count":  6,
+  "cpu_count_logical":  12,
+  "gpu":  "NVIDIA A100-SXM4-40GB",
+  "gpu_count":  1,
+  "disk":  {
+    "/":  {
+      "total":  "253055008768",
+      "used":  "42951909376"
+    }
+  },
+  "memory":  {
+    "total":  "89632796672"
+  },
+  "cpu":  {
+    "count":  6,
+    "countLogical":  12
+  },
+  "gpu_nvidia":  [
+    {
+      "name":  "NVIDIA A100-SXM4-40GB",
+      "memoryTotal":  "42949672960",
+      "cudaCores":  6912,
+      "architecture":  "Ampere"
+    }
+  ],
+  "cudaVersion":  "12.2"
+}

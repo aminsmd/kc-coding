@@ -1,5 +1,0 @@
-Model,Class_Weights,Accuracy,F1_Macro,F1_Weighted
-Logistic_Regression,No,0.600 ± 0.096,0.354 ± 0.104,0.540 ± 0.117
-Random_Forest,No,0.678 ± 0.198,0.594 ± 0.322,0.649 ± 0.227
-Naive_Bayes,No,0.546 ± 0.051,0.220 ± 0.050,0.434 ± 0.062
-SVM,No,0.682 ± 0.167,0.608 ± 0.292,0.661 ± 0.192

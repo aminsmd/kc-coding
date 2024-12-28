@@ -10,13 +10,14 @@ from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import (
     Dense, LSTM, Embedding, Input, Dropout, 
-    Conv1D, MaxPooling1D, GlobalMaxPooling1D, BatchNormalization
+    Conv1D, MaxPooling1D, GlobalMaxPooling1D, BatchNormalization, Bidirectional, Concatenate
 )
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from sklearn.utils.class_weight import compute_class_weight
 from gensim.models import KeyedVectors
 import fasttext
+import re
 
 def convert_to_serializable(obj):
     """Convert numpy types to Python native types for JSON serialization."""
@@ -148,17 +149,18 @@ def build_lstm_model_with_embeddings(vocab_size, embedding_dim, max_length, num_
     else:
         x = Embedding(vocab_size, embedding_dim)(inputs)
     
-    x = LSTM(200, return_sequences=True)(x)
-    x = BatchNormalization()(x)
-    x = Dropout(0.3)(x)
+    # Bidirectional LSTM for better context understanding
+    x = Bidirectional(LSTM(128, return_sequences=True))(x)
+    x = Dropout(0.2)(x)
     
-    x = LSTM(100)(x)
-    x = BatchNormalization()(x)
-    x = Dropout(0.3)(x)
+    # Global pooling to capture important features
+    x = GlobalMaxPooling1D()(x)
     
-    x = Dense(100, activation='relu')(x)
-    x = BatchNormalization()(x)
-    x = Dropout(0.3)(x)
+    # Dense layers with proper regularization
+    x = Dense(128, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.01))(x)
+    x = Dropout(0.2)(x)
+    x = Dense(64, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.01))(x)
+    x = Dropout(0.2)(x)
     
     outputs = Dense(num_classes, activation='softmax')(x)
     model = Model(inputs=inputs, outputs=outputs)
@@ -176,18 +178,29 @@ def build_cnn_model_with_embeddings(vocab_size, embedding_dim, max_length, num_c
     else:
         x = Embedding(vocab_size, embedding_dim)(inputs)
     
-    x = Conv1D(128, 5, activation='relu')(x)
-    x = MaxPooling1D(5)(x)
-    x = Conv1D(128, 5, activation='relu')(x)
-    x = GlobalMaxPooling1D()(x)
-    x = Dense(128, activation='relu')(x)
+    # Multiple parallel convolutions for different n-gram sizes
+    conv_blocks = []
+    for kernel_size in [3, 4, 5]:
+        conv = Conv1D(128, kernel_size, activation='relu', 
+                     kernel_regularizer=tf.keras.regularizers.l2(0.01))(x)
+        pool = GlobalMaxPooling1D()(conv)
+        conv_blocks.append(pool)
+    
+    # Concatenate all conv blocks
+    x = Concatenate()(conv_blocks)
+    
+    # Dense layers with proper regularization
+    x = Dense(128, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.01))(x)
     x = Dropout(0.2)(x)
+    x = Dense(64, activation='relu', kernel_regularizer=tf.keras.regularizers.l2(0.01))(x)
+    x = Dropout(0.2)(x)
+    
     outputs = Dense(num_classes, activation='softmax')(x)
     model = Model(inputs=inputs, outputs=outputs)
     return model
 
 def run_dl_experiment(data, model_type='lstm', merge_codes=None, use_weights=True,
-                     embedding_path=None, embedding_type='fasttext'):
+                     embedding_path=None, embedding_type='fasttext', max_length=100):
     """
     Run deep learning experiments with configurable KC merging and class weighting.
     
@@ -198,6 +211,7 @@ def run_dl_experiment(data, model_type='lstm', merge_codes=None, use_weights=Tru
         use_weights (bool): Whether to use class weights
         embedding_path (str, optional): Path to pre-trained embeddings
         embedding_type (str): Type of embedding model ('fasttext' or 'word2vec')
+        max_length (int): Maximum sequence length for padding
     
     Returns:
         str: Path to results directory
@@ -211,20 +225,30 @@ def run_dl_experiment(data, model_type='lstm', merge_codes=None, use_weights=Tru
             new_kc = f"KC_{'_'.join(map(str, codes_to_merge))}"
             df.loc[df['KC'].isin(codes_to_merge), 'KC'] = new_kc
     
-    # Prepare the data
-    texts = df['event_result'].astype(str)
+    # Text preprocessing improvements
+    def preprocess_text(text):
+        # Convert to lowercase
+        text = text.lower()
+        # Remove special characters and extra whitespace
+        text = re.sub(r'[^\w\s]', ' ', text)
+        text = ' '.join(text.split())
+        return text
+    
+    # Prepare the data with improved preprocessing
+    texts = df['event_result'].astype(str).apply(preprocess_text)
     
     # Convert KC labels to strings
     labels = df['KC'].astype(str)
     
-    # Tokenize texts
-    tokenizer = Tokenizer()
+    # Tokenize texts with improved settings
+    tokenizer = Tokenizer(filters='!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n',
+                         lower=True,
+                         oov_token='<UNK>')
     tokenizer.fit_on_texts(texts)
     sequences = tokenizer.texts_to_sequences(texts)
     
-    # Pad sequences
-    max_length = 50  # Can be adjusted based on data
-    X = pad_sequences(sequences, maxlen=max_length)
+    # Pad sequences using the provided max_length
+    X = pad_sequences(sequences, maxlen=max_length, padding='post', truncating='post')
     
     # Encode labels
     label_encoder = LabelEncoder()
@@ -233,9 +257,12 @@ def run_dl_experiment(data, model_type='lstm', merge_codes=None, use_weights=Tru
     # Convert to categorical
     y_cat = tf.keras.utils.to_categorical(y)
     
-    # Split the data
+    # Split the data with stratification
     X_train, X_val, y_train, y_val = train_test_split(
-        X, y_cat, test_size=0.2, random_state=42
+        X, y_cat, 
+        test_size=0.2, 
+        random_state=42,
+        stratify=y  # Use original labels for stratification
     )
     
     # Compute class weights if needed
@@ -247,6 +274,11 @@ def run_dl_experiment(data, model_type='lstm', merge_codes=None, use_weights=Tru
             y=y
         )
         class_weight_dict = dict(zip(range(len(class_weights)), class_weights))
+        
+        # Print class weights for debugging
+        print("\nClass weights:")
+        for cls, weight in class_weight_dict.items():
+            print(f"Class {cls}: {weight:.2f}")
     
     # Setup directory structure
     weight_str = 'weighted' if use_weights else 'unweighted'
@@ -260,9 +292,14 @@ def run_dl_experiment(data, model_type='lstm', merge_codes=None, use_weights=Tru
     
     # Model parameters
     vocab_size = len(tokenizer.word_index) + 1
-    embedding_dim = 300  # Increased from 100
-    max_length = 100    # Increased from 50
+    embedding_dim = 300
     num_classes = y_cat.shape[1]
+    
+    # Print model parameters for debugging
+    print(f"\nModel parameters:")
+    print(f"Vocabulary size: {vocab_size}")
+    print(f"Number of classes: {num_classes}")
+    print(f"Sequence length: {max_length}")
     
     # Create initial config dictionary
     config = {
@@ -281,6 +318,7 @@ def run_dl_experiment(data, model_type='lstm', merge_codes=None, use_weights=Tru
     # Load embeddings if specified
     embedding_matrix = None
     if embedding_path:
+        print(f"\nLoading embeddings from: {embedding_path}")
         embedding_model = load_embedding_model(embedding_path, embedding_type)
         embedding_matrix = create_embedding_matrix(
             tokenizer.word_index, 
@@ -288,6 +326,7 @@ def run_dl_experiment(data, model_type='lstm', merge_codes=None, use_weights=Tru
             embedding_type,
             embedding_dim
         )
+        print(f"Embedding matrix shape: {embedding_matrix.shape}")
         
         # Update config with embedding info
         config['embedding_model'] = {
@@ -312,45 +351,66 @@ def run_dl_experiment(data, model_type='lstm', merge_codes=None, use_weights=Tru
     else:
         raise ValueError(f"Invalid model type: {model_type}")
     
-    # Compile model
+    # Print model summary
+    model.summary()
+    
+    # Compile model with improved settings
+    optimizer = tf.keras.optimizers.Adam(learning_rate=1e-3)  # Initial learning rate
     model.compile(
-        optimizer='adam',
+        optimizer=optimizer,
         loss='categorical_crossentropy',
-        metrics=['accuracy']
+        metrics=['accuracy', tf.keras.metrics.Precision(), tf.keras.metrics.Recall()]
     )
     
-    # Add early stopping with restore_best_weights=True
-    early_stopping = tf.keras.callbacks.EarlyStopping(
-        monitor='val_loss',
-        patience=5,
-        restore_best_weights=True  # This ensures we keep the best weights
-    )
+    # Add callbacks with improvements
+    callbacks = [
+        # Early stopping with increased patience
+        tf.keras.callbacks.EarlyStopping(
+            monitor='val_loss',
+            patience=15,
+            restore_best_weights=True,
+            mode='min'
+        ),
+        # Model checkpoint
+        tf.keras.callbacks.ModelCheckpoint(
+            os.path.join(run_dir, 'models/weights', 'best.weights.h5'),
+            monitor='val_loss',
+            save_best_only=True,
+            save_weights_only=True,
+            mode='min',
+            verbose=1
+        ),
+        # Learning rate reduction on plateau with more aggressive reduction
+        tf.keras.callbacks.ReduceLROnPlateau(
+            monitor='val_loss',
+            factor=0.5,  # Reduce LR by half when plateau is detected
+            patience=5,
+            min_lr=1e-6,
+            verbose=1
+        ),
+        # TensorBoard logging
+        tf.keras.callbacks.TensorBoard(
+            log_dir=os.path.join(run_dir, 'logs/training_logs'),
+            histogram_freq=1
+        )
+    ]
     
-    # Add model checkpoint to save best weights
-    best_weights_path = os.path.join(run_dir, 'models/weights', 'best.weights.h5')
-    checkpoint = tf.keras.callbacks.ModelCheckpoint(
-        best_weights_path,
-        monitor='val_loss',
-        save_best_only=True,
-        save_weights_only=True,
-        mode='min',
-        verbose=1  # Add verbosity to see when weights are saved
-    )
-    
-    # Train model
+    # Train model with improved settings
+    print("\nStarting model training...")
+    print(f"Initial learning rate: {tf.keras.backend.get_value(model.optimizer.learning_rate)}")
     history = model.fit(
         X_train, y_train,
         validation_data=(X_val, y_val),
-        epochs=50,
+        epochs=150,
         batch_size=32,
         class_weight=class_weight_dict,
-        callbacks=[early_stopping, checkpoint],
+        callbacks=callbacks,
         verbose=1
     )
     
     # Load the best weights before final evaluation
     print("\nLoading best weights for final evaluation...")
-    model.load_weights(best_weights_path)
+    model.load_weights(os.path.join(run_dir, 'models/weights', 'best.weights.h5'))
     
     # Save training history
     history_dict = convert_to_serializable(history.history)
@@ -366,18 +426,23 @@ def run_dl_experiment(data, model_type='lstm', merge_codes=None, use_weights=Tru
     
     # Evaluate model using best weights
     print("\nEvaluating model with best weights...")
-    val_loss, val_accuracy = model.evaluate(X_val, y_val, verbose=1)
+    evaluation = model.evaluate(X_val, y_val, verbose=1)
+    metrics_names = model.metrics_names
     
-    # Save evaluation metrics
+    # Create evaluation metrics dictionary
     metrics = {
-        'validation_loss': float(val_loss),
-        'validation_accuracy': float(val_accuracy),
-        'training_history': history_dict,
-        'best_weights_path': best_weights_path,
-        'final_weights_path': final_weights_path,
-        'early_stopping_epoch': early_stopping.stopped_epoch if early_stopping.stopped_epoch > 0 else len(history.history['loss'])
+        metrics_names[i]: float(evaluation[i]) for i in range(len(metrics_names))
     }
     
+    # Add other metadata
+    metrics.update({
+        'training_history': history_dict,
+        'best_weights_path': os.path.join(run_dir, 'models/weights', 'best.weights.h5'),
+        'final_weights_path': final_weights_path,
+        'early_stopping_epoch': callbacks[0].stopped_epoch if callbacks[0].stopped_epoch > 0 else len(history.history['loss'])
+    })
+    
+    # Save evaluation metrics
     with open(os.path.join(run_dir, 'metrics/summary', 'evaluation_metrics.json'), 'w') as f:
         json.dump(metrics, f, indent=4)
     
